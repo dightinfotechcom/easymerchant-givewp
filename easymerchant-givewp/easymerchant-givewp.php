@@ -25,30 +25,6 @@ if (!defined('EASYMERCHANT_FOR_GIVE_VERSION')) {
     define('EASYMERCHANT_FOR_GIVE_VERSION', '1.0.2');
 }
 
-/**
- * Register payment method.
- * @since 1.0.0
- * @param array $gateways List of registered gateways.
- * @return array
- */
-
-function easymerchant_givewp_register_payment_method($gateways)
-{
-    $gateways['easymerchant'] = array(
-        'admin_label'    => __('EasyMerchant', 'easymerchant-givewp'), // This label will be displayed under Give settings in admin.
-        'checkout_label' => __('EasyMerchant', 'easymerchant-givewp'), // This label will be displayed on donation form in frontend.
-    );
-    return $gateways;
-}
-add_filter('give_payment_gateways', 'easymerchant_givewp_register_payment_method');
-
-function easymerchant_givewp_register_recurring_payment_method($availableGateway)
-{
-    $availableGateway['easymerchant'] = 'easymerchant-givewp';
-    return $availableGateway;
-}
-add_filter('give_recurring_available_gateways', 'easymerchant_givewp_register_recurring_payment_method');
-
 easymerchant_givewp_includes();
 
 /**
@@ -384,3 +360,9 @@ function easymerchant_givewp_display_minimum_recurring_version_notice()
     }
 }
 add_action('admin_notices', 'easymerchant_givewp_display_minimum_recurring_version_notice');
+
+// Register the gateway with the givewp gateway api
+add_action('givewp_register_payment_gateway', static function ($paymentGatewayRegister) {
+    include 'class-easymerchant-gateway.php';
+    $paymentGatewayRegister->registerGateway(EasyMerchantGateway::class);
+});
