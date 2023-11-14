@@ -72,7 +72,8 @@ class EasyMerchantGateway extends PaymentGateway
     public function formSettings(int $formId): array
     {
         return [
-            'publishable_key' => 'Ow9CaBwjk23cHGakuhBDl5sj9'
+            // 'publishable_key' => 'Ow9CaBwjk23cHGakuhBDl5sj9'
+            'publishable_key' => '280066215f64af12cee5765cb'
         ];
     }
 
@@ -88,7 +89,8 @@ class EasyMerchantGateway extends PaymentGateway
             }
 
             // Step 2: Create a payment with your gateway or use existing data.
-            $chargeId = give_clean($gatewayData['easymerchant-charge-id']);
+            // $chargeId = give_clean($gatewayData['easymerchant-charge-id']);
+             $chargeId = $this->makePaymentRequest(['transaction_id' => $gatewayData['easymerchant-charge-id']]);
 
             // Step 3: Return a command to complete the donation. You can alternatively return PaymentProcessing for gateways that require a webhook or similar to confirm that the payment is complete. PaymentProcessing will trigger a Payment Processing email notification, configurable in the settings.
             return new PaymentComplete($chargeId);
