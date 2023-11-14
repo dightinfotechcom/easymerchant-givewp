@@ -117,4 +117,78 @@ class EasyMerchantGateway extends PaymentGateway
         // Step 2: return a command to complete the refund.
         return new PaymentRefunded();
     }
+
+    private function makePaymentRequest(array $data): array
+    {
+        $cc_info                  = give_get_donation_easymerchant_cc_info();
+
+        // Use the card details in this function calling from "give_get_donation_easymerchant_cc_info" function.
+        $cc_holder              = $cc_info['card_name'];
+        $cc_number              = $cc_info['card_number_easy'];
+        $cardNumber             = str_replace(' ', '', $cc_number);
+        $month                  = $cc_info['card_exp_month'];
+        $year                   = $cc_info['card_exp_year'];
+        $cc_cvc                 = $cc_info['card_cvc'];
+        $currentDate       = date("m/d/Y");
+        $originalValues         = ["day", "week", "month", "quarter", "year"]; // API support these terms
+        $replacementValues      = ["daily", "weekly", "monthly", "quarterly", "yearly"]; //givewp support these terms
+        if (isset($data['period'])) {
+            $originalValue        = $data['period'];
+            $key                  = array_search($originalValue, $originalValues);
+            if ($key !== false) {
+                $data['period'] = $replacementValues[$key];
+            }
+        }
+        $curl = curl_init();
+        curl_setopt_array($curl, array(
+            CURLOPT_URL => 'https://stage-api.stage-easymerchant.io/api/v1/charges/',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 0,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POSTFIELDS => json_encode([
+                'payment_mode'   => 'test',
+                'amount'         => $data['amount'],
+                'name'           => $data['user_info']['first_name'],
+                'email'          => $data['user_email'],
+                'description'    => 'test',
+                'start_date'     => $currentDate,
+                'currency'       => give_get_currency($form_id),
+                'card_number'    => $cardNumber,
+                'exp_month'      => $month,
+                'exp_year'       => $year,
+                'cvc'            => $cc_cvc,
+                'cardholder_name' => $cc_holder,
+                'payment_type'   => 'recurring',
+                'interval'       => $data['period'],
+                'allowed_cycles' => 12,
+            ]),
+            CURLOPT_HTTPHEADER => array(
+                'X-Api-Key: doggiedaycareKxYeMhRl',
+                'X-Api-Secret: doggiedaycareIBagbKnt',
+                'Content-Type: application/json',
+            ),
+        ));
+        $response = json_decode(curl_exec($curl), true);
+        // Check for cURL errors
+        if (curl_errno($curl)) {
+            throw new Exception('cURL error: ' . curl_error($curl));
+        }
+        curl_close($curl);
+        // Check if the charge ID is present in the response
+        if (isset($response['charge_id'])) {
+            $chargeId = $response['charge_id'];
+            return $chargeId;
+        } else {
+            throw new Exception('Charge ID not found in the response.');
+        }
+        return array_merge([
+            'success' => true,
+            'transaction_id' => $chargeId,
+            'subscription_id' => $response['subscription_id'],
+        ], $data);
+    }
 }
