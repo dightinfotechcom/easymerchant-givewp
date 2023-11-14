@@ -54,7 +54,16 @@ class EasyMerchantGateway extends PaymentGateway
     {
         // Step 1: add any gateway fields to the form using html.  In order to retrieve this data later the name of the input must be inside the key gatewayData (name='gatewayData[input_name]').
         // Step 2: you can alternatively send this data to the $gatewayData param using the filter `givewp_create_payment_gateway_data_{gatewayId}`
-        return easymerchant_output_redirect_notice($formId, $args);
+        // return easymerchant_output_redirect_notice($formId, $args);
+        $output1 = easymerchant_output_redirect_notice($formId, $args);
+
+        // Call the second function
+        $output2 = easymerchant_givewp_custom_credit_card_form($form_id);
+
+        // Concatenate the results or use any other logic based on your requirements
+        $result = $output1 . $output2;
+
+        return $result;
     }
 
     /**
