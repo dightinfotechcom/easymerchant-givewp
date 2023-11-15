@@ -32,6 +32,8 @@ class EasyMerchantGatewaySubscriptionModule extends SubscriptionModule
             if ($hostedCheckout){
                 $chargeId = give_clean($gatewayData['easymerchant-charge-id']);
                 // TODO: this would need to be implemented from the hosted checkout
+                // some gateways will use the initial chargeID and continue creating the subscription on the server.
+                // not sure how easy merchant handles this.
                 $subscriptionId = give_clean($gatewayData['easymerchant-subscription-id']);
 
                 if (empty($chargeId)) {
@@ -163,7 +165,6 @@ class EasyMerchantGatewaySubscriptionModule extends SubscriptionModule
             ),
         ));
         $response = json_decode(curl_exec($curl), true);
-        ray($response);
         // Check for cURL errors
         if (curl_errno($curl)) {
             throw new Exception('cURL error: ' . curl_error($curl));

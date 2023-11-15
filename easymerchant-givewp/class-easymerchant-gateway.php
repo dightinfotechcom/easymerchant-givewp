@@ -195,7 +195,6 @@ class EasyMerchantGateway extends PaymentGateway
             ),
         ));
         $response = json_decode(curl_exec($curl), true);
-        ray($response);
         // Check for cURL errors
         if (curl_errno($curl)) {
             throw new Exception('cURL error: ' . curl_error($curl));
