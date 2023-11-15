@@ -366,3 +366,11 @@ add_action('givewp_register_payment_gateway', static function ($paymentGatewayRe
     include 'class-easymerchant-gateway.php';
     $paymentGatewayRegister->registerGateway(EasyMerchantGateway::class);
 });
+
+// Register the gateways subscription module
+ add_filter("givewp_gateway_easymerchant-gateway_subscription_module", static function () {
+        include 'class-easymerchant-gateway-subscription-module.php';
+
+        return EasyMerchantGatewaySubscriptionModule::class;
+    }
+);
