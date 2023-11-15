@@ -9,48 +9,53 @@
    * Example of a gateway api.
    */
   const easyMerchantGatewayApi = {
-    publishable_key: "",
-    secureData: "",
+    secureData: {
+      publishable_key: "",
+      charge_id: "",
+    },
+    async response() {
+        return new Promise((resolve, reject) => {
+            const interval = setInterval(() => {
+                if (this.secureData.charge_id !== "") {
+                    clearInterval(interval);
+                    resolve({charge_id: this.secureData.charge_id});
+                }
+
+                if (!this.secureData.publishable_key) {
+                    clearInterval(interval);
+                    reject(window.wp.i18n.__("EasyMerchantGatewayApi publishable_key is required."));
+                }
+
+                if (this.error) {
+                    clearInterval(interval);
+                    reject(JSON.stringify(this.error));
+                }
+            }, 5000);
+        });
+    },
     init(publishable_key) {
-      this.publishable_key = publishable_key;
+      this.secureData.publishable_key = publishable_key;
 
       easyUIConnect.easyMerchantOnInit();
     },
-    async submit(values) {
-      if (!this.publishable_key) {
-        return {
-          error: "EasyMerchantGatewayApi publishable_key is required.",
-        };
-      }
-      // if (this.secureData.length === 0) {
-      //   return {
-      //     error: "EasyMerchantGatewayApi data is required.",
-      //   };
-      // }
-
+    submit(values) {
       try {
         easyMerchant.bindPaymentDetails(
           {
-            publishable_key: this.publishable_key,
+            publishable_key: easyMerchantGatewayApi.secureData.publishable_key,
             amount: values.amount,
             email: values.email,
             description: "givewp donation",
           },
           function (response) {
-            if (response.status === 200 && response.charge_id != "") {
-              return {
-                transactionId: response.charge_id,
-              };
+            if (response.charge_id !== "") {
+              easyMerchantGatewayApi.secureData.charge_id = response.charge_id;
             }
           }
         );
       } catch (error) {
-        console.log(error);
-
-        return { error };
+        easyMerchantGatewayApi.error = error;
       }
-
-      return { error: window.wp.i18n.__("Unable to process payment.", 'easymerchant-givewp') };
     },
   };
 
@@ -67,10 +72,8 @@
       {},
         window.wp.element.createElement(
           "p",
-          {
-            className: "easymerchant-gateway-fields",
-          },
-          window.wp.i18n.__("Continue to donate", "easymerchant-givewp")
+          {},
+          window.wp.i18n.__("Make your donations quickly and securely with EasyMerchant. How it works: An Easymerchant window will open after you click the Donate Now button where you can securely make your donation. You will then be brought back to this page to view your receipt.", "easymerchant-givewp"),
         )
     );
   }
@@ -85,17 +88,17 @@
 
       easyMerchantGatewayApi.init(publishable_key);
     },
-    // donor clicks donate button and form values are passed to this function
     async beforeCreatePayment(values) {
-      const { transactionId, error: submitError } =
-        await easyMerchantGatewayApi.submit(values);
+      easyMerchantGatewayApi.submit(values);
+      const { charge_id, error } = await easyMerchantGatewayApi.response();
 
-      if (submitError) {
-        throw new Error(submitError);
+      if (error) {
+        throw new Error(error);
       }
 
       return {
-        "easymerchant-charge-id": transactionId,
+        "easymerchant-hosted-checkout": true,
+        "easymerchant-charge-id": charge_id,
       };
     },
     Fields() {
