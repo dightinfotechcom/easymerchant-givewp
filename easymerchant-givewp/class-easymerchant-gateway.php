@@ -99,7 +99,7 @@ class EasyMerchantGateway extends PaymentGateway
                 $chargeId = give_clean($gatewayData['easymerchant-charge-id']);
 
                 if (empty($chargeId)) {
-                    throw new PaymentGatewayException(__('EasyMerchant Charge ID is required.', 'example-give' ) );
+                    throw new PaymentGatewayException(__('EasyMerchant Charge ID 1 is required.', 'easymerchant-givewp' ) );
                 }
 
                 return new PaymentComplete($chargeId);
@@ -115,8 +115,17 @@ class EasyMerchantGateway extends PaymentGateway
                 'period' => 'month',
             ]);
 
+            if(empty($response)) {
+                throw new PaymentGatewayException(__('Something went wrong!', 'easymerchant-givewp' ) );
+            }
+
+            if(empty($response['status'])) {
+                $message = empty($response['message']) ? 'Something went wrong!' : $response['message'];
+                throw new PaymentGatewayException(__($message, 'easymerchant-givewp' ) );
+            }
+
             if (empty($response['charge_id'])) {
-                throw new PaymentGatewayException(__('EasyMerchant Charge ID is required.', 'example-give' ) );
+                throw new PaymentGatewayException(__('EasyMerchant Charge ID 2 is required.', 'easymerchant-givewp' ) );
             }
 
             //TODO: Handle subscription ID in subscription Module $response['subscription_id'];
@@ -130,7 +139,7 @@ class EasyMerchantGateway extends PaymentGateway
 
             DonationNote::create([
                 'donationId' => $donation->id,
-                'content' => sprintf(esc_html__('Donation failed. Reason: %s', 'example-give'), $errorMessage)
+                'content' => sprintf(esc_html__('Donation failed. Reason: %s', 'easymerchant-givewp'), $errorMessage)
             ]);
 
             throw new PaymentGatewayException($errorMessage);
@@ -161,8 +170,7 @@ class EasyMerchantGateway extends PaymentGateway
         $month                  = $cc_info['card_exp_month'];
         $year                   = $cc_info['card_exp_year'];
         $cc_cvc                 = $cc_info['card_cvc'];
-        $currentDate       = date("m/d/Y");
-
+        $currentDate            = date("m/d/Y");
         $curl = curl_init();
         curl_setopt_array($curl, array(
             CURLOPT_URL => 'https://stage-api.stage-easymerchant.io/api/v1/charges/',

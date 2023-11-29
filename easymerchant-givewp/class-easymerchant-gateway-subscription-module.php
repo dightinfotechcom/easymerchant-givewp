@@ -88,9 +88,28 @@ class EasyMerchantGatewaySubscriptionModule extends SubscriptionModule
      */
     public function cancelSubscription(Subscription $subscription)
     {
+        if($subscription->gatewayId!='easymerchant-gateway') return false;
+
         try {
             // Step 1: cancel the subscription with your gateway.
-
+            $curl = curl_init();
+            curl_setopt_array($curl, array(
+                CURLOPT_URL => 'https://stage-api.stage-easymerchant.io/api/v1/subscriptions/'.$subscription->gatewaySubscriptionId.'/cancel/',
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_ENCODING => '',
+                CURLOPT_MAXREDIRS => 10,
+                CURLOPT_TIMEOUT => 0,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                CURLOPT_CUSTOMREQUEST => 'POST',
+                // CURLOPT_POSTFIELDS => json_encode([]),
+                CURLOPT_HTTPHEADER => array(
+                    'X-Api-Key: loveyoursupportJifDbpdS',
+                    'X-Api-Secret: loveyoursupportSyPlraZT',
+                    'Content-Type: application/json',
+                ),
+            ));
+            $response = json_decode(curl_exec($curl), true);
             // Step 2: update the subscription status to cancelled.
             $subscription->status = SubscriptionStatus::CANCELLED();
             $subscription->save();
@@ -120,7 +139,7 @@ class EasyMerchantGatewaySubscriptionModule extends SubscriptionModule
         $month                  = $cc_info['card_exp_month'];
         $year                   = $cc_info['card_exp_year'];
         $cc_cvc                 = $cc_info['card_cvc'];
-        $currentDate       = date("m/d/Y");
+        $currentDate            = date("m/d/Y");
         $originalValues         = ["day", "week", "month", "quarter", "year"]; // API support these terms
         $replacementValues      = ["daily", "weekly", "monthly", "quarterly", "yearly"]; //givewp support these terms
         if (isset($data['period'])) {
