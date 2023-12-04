@@ -47,7 +47,7 @@ function easymerchant_givewp_frontend_scripts()
 		]
 	);
 
-	// Load third-party stripe js when required gateways are active.
+	// Load third-party js when required gateways are active.
 	if (apply_filters('easymerchant_givewp_js_loading_conditions', easymerchant_givewp_is_any_payment_method_active())) {
 		$easymerchant_footer = give_is_setting_enabled(give_get_option('easymerchant_footer')) ? true : false;
 		$easymerchant_footer = true;

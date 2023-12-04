@@ -116,7 +116,8 @@ function give_get_donation_easymerchant_cc_info()
     $post_data = give_clean($_POST); // WPCS: input var ok, sanitization ok, CSRF ok.
     $cc_info                        = [];
     $cc_info['card_name']           = !empty($post_data['card_name']) ? $post_data['card_name'] : '';
-    $cc_info['card_number_easy']    = !empty($post_data['card_number_easy']) ? $post_data['card_number_easy'] : '';
+    $cc_info['card_number_easy']    = !empty($post_data['card_number_easy']) ? $post_data['card_number_easy'] : $post_data['card_number'];
+    $cc_info['card_number_easy']    = str_replace(' ', '', $cc_info['card_number_easy']);
     $cc_info['card_cvc']            = !empty($post_data['card_cvc']) ? $post_data['card_cvc'] : '';
     $cc_info['card_exp_month']      = !empty($post_data['card_exp_month']) ? $post_data['card_exp_month'] : '';
     $cc_info['card_exp_year']       = !empty($post_data['card_exp_year']) ? $post_data['card_exp_year'] : '';

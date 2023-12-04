@@ -99,7 +99,7 @@ var easyForGive = function () {
                         easyUIConnect.easyMerchantOnInit();
                     }
                     // alert('can trigger modal here');
-                // a || "stripe" === i || s ? n.mountElement(o) : e && n.unMountElement(o), s && n.triggerStripeModal(r, n, l, o)
+                // a || "easymerchant" === i || s ? n.mountElement(o) : e && n.unMountElement(o), s && n.triggerStripeModal(r, n, l, o)
             }
         }));
     }))

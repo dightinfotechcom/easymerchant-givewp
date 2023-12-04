@@ -43,9 +43,9 @@ function easymerchant_givewp_add_payment_request_to_checkout($formId, $args)
 		// Load Payment Request Button Markup.
 		echo easymerchant_givewp_payment_request_button_markup($formId, $args);
 ?>
-		<div class="give-stripe-checkout-modal-else-part">
+		<div class="give-em-checkout-modal-else-part">
 			<hr />
-			<?php esc_html_e('or Pay with Card', 'give-stripe'); ?>
+			<?php esc_html_e('or Pay with Card', 'easymerchant-givewp'); ?>
 		</div>
 <?php
 	}
