@@ -116,7 +116,7 @@ function give_get_donation_easymerchant_cc_info()
     $post_data = give_clean($_POST); // WPCS: input var ok, sanitization ok, CSRF ok.
     $cc_info                        = [];
     $cc_info['card_name']           = !empty($post_data['card_name']) ? $post_data['card_name'] : '';
-    $cc_info['card_number_easy']    = !empty($post_data['card_number_easy']) ? $post_data['card_number_easy'] : $post_data['card_number'];
+    $cc_info['card_number_easy']    = !empty($post_data['card_number']) ? $post_data['card_number'] : $post_data['card_number_easy'];
     $cc_info['card_number_easy']    = str_replace(' ', '', $cc_info['card_number_easy']);
     $cc_info['card_cvc']            = !empty($post_data['card_cvc']) ? $post_data['card_cvc'] : '';
     $cc_info['card_exp_month']      = !empty($post_data['card_exp_month']) ? $post_data['card_exp_month'] : '';
@@ -194,7 +194,7 @@ function easymerchant_givewp_process_easymerchant_donation($posted_data)
                     'email'          => $posted_data['user_email'],
                     'description'    => 'test',
                     'start_date'     => $currentDate,
-                    'currency'       => give_get_currency($form_id),
+                    'currency'       => 'USD', //give_get_currency($form_id),
                     'card_number'    => $cardNumber,
                     'exp_month'      => $month,
                     'exp_year'       => $year,

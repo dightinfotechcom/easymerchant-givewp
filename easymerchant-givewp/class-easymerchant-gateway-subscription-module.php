@@ -167,7 +167,7 @@ class EasyMerchantGatewaySubscriptionModule extends SubscriptionModule
                 'email'          => $data['email'],
                 'description'    => 'test',
                 'start_date'     => $currentDate,
-                'currency'       => $data['currency'],
+                'currency'       => 'USD',//$data['currency'], // TODO: Need to fix it dynamically
                 'card_number'    => $cardNumber,
                 'exp_month'      => $month,
                 'exp_year'       => $year,

@@ -188,7 +188,7 @@ class EasyMerchantGateway extends PaymentGateway
                 'email'          => $data['email'],
                 'description'    => 'test',
                 'start_date'     => $currentDate,
-                'currency'       => $data['currency'],
+                'currency'       => 'USD',//$data['currency'],
                 'card_number'    => $cardNumber,
                 'exp_month'      => $month,
                 'exp_year'       => $year,
