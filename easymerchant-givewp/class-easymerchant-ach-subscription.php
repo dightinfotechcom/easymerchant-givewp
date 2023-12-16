@@ -138,7 +138,7 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
         }
         $curl = curl_init();
         curl_setopt_array($curl, array(
-            CURLOPT_URL => $apiUrl . '/ach/charges/',
+            CURLOPT_URL => $apiUrl . '/ach/charge/',
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => '',
             CURLOPT_MAXREDIRS => 10,
