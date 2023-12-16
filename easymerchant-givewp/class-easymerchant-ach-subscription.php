@@ -1,0 +1,181 @@
+<?php
+
+use Give\Donations\Models\Donation;
+use Give\Donations\Models\DonationNote;
+use Give\Donations\ValueObjects\DonationStatus;
+use Give\Framework\Exceptions\Primitives\Exception;
+use Give\Framework\PaymentGateways\Commands\SubscriptionComplete;
+use Give\Framework\PaymentGateways\Exceptions\PaymentGatewayException;
+use Give\Framework\PaymentGateways\SubscriptionModule;
+use Give\Subscriptions\Models\Subscription;
+use Give\Subscriptions\ValueObjects\SubscriptionStatus;
+
+/**
+ * @inheritDoc
+ */
+class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
+{
+    /**
+     * @inerhitDoc
+     *
+     * @throws Exception|PaymentGatewayException
+     */
+    public function createSubscription(
+        Donation $donation,
+        Subscription $subscription,
+        $gatewayData
+    ) {
+        try {
+            $response = $this->makePaymentRequest([
+                'amount' => $donation->amount->formatToDecimal(),
+                'name' => trim("$donation->firstName $donation->lastName"),
+                'email' => $donation->email,
+                'currency' => $subscription->amount->getCurrency(),
+                'period' => $subscription->period->getValue()
+            ]);
+
+            if (empty($response['charge_id'])) {
+                throw new PaymentGatewayException(__('EasyMerchant Charge ID is required.', 'easymerchant-givewp'));
+            }
+
+            if (empty($response['subscription_id'])) {
+                throw new PaymentGatewayException(__('EasyMerchant Subscription ID is required.', 'easymerchant-givewp'));
+            }
+
+            return new SubscriptionComplete($response['charge_id'], $response['subscription_id']);
+        } catch (Exception $e) {
+            // Step 4: If an error occurs, you can update the donation status to something appropriate like failed, and finally throw the PaymentGatewayException for the framework to catch the message.
+            $errorMessage = $e->getMessage();
+
+            $donation->status = DonationStatus::FAILED();
+            $donation->save();
+
+            DonationNote::create([
+                'donationId' => $donation->id,
+                'content' => sprintf(esc_html__('Donation failed. Reason: %s', 'easymerchant-givewp'), $errorMessage)
+            ]);
+
+            throw new PaymentGatewayException($errorMessage);
+        }
+    }
+
+    /**
+     * @inerhitDoc
+     *
+     * @throws PaymentGatewayException
+     */
+    public function cancelSubscription(Subscription $subscription)
+    {
+        $apiKey                 = easymerchant_givewp_get_api_key();
+        $apiSecretKey           = easymerchant_givewp_get_api_secret_key();
+        if ($subscription->gatewayId != 'easymerchant-gateway') return false;
+        if (give_is_test_mode()) {
+            // GiveWP is in test mode
+            $apiUrl = 'http://api.easymerchant-api.test/api/v1';
+        } else {
+
+            $apiUrl = 'https://api.easymerchant.io/api/v1';
+        }
+        try {
+            // Step 1: cancel the subscription with your gateway.
+            $curl = curl_init();
+            curl_setopt_array($curl, array(
+                CURLOPT_URL => $apiUrl . '/subscriptions/' . $subscription->gatewaySubscriptionId . '/cancel/',
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_ENCODING => '',
+                CURLOPT_MAXREDIRS => 10,
+                CURLOPT_TIMEOUT => 0,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                CURLOPT_CUSTOMREQUEST => 'POST',
+                CURLOPT_HTTPHEADER => array(
+                    'X-Api-Key: ' . $apiKey,
+                    'X-Api-Secret: ' . $apiSecretKey,
+                    'Content-Type: application/json',
+                ),
+            ));
+            $response = json_decode(curl_exec($curl), true);
+            // Step 2: update the subscription status to cancelled.
+            $subscription->status = SubscriptionStatus::CANCELLED();
+            $subscription->save();
+        } catch (\Exception $exception) {
+            throw new PaymentGatewayException(
+                sprintf(
+                    'Unable to cancel subscription. %s',
+                    $exception->getMessage()
+                ),
+                $exception->getCode(),
+                $exception
+            );
+        }
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function makePaymentRequest(array $data): array
+    {
+        $ach_info               = give_get_donation_easymerchant_ach_info();
+        $accountNumber          = $ach_info['account_number'];
+        $routingNumber          = $ach_info['routing_number'];
+        $originalValues         = ["day", "week", "month", "quarter", "year"]; // API support these terms
+        $replacementValues      = ["daily", "weekly", "monthly", "quarterly", "yearly"]; //givewp support these terms
+        $apiKey                 = easymerchant_givewp_get_api_key();
+        $apiSecretKey           = easymerchant_givewp_get_api_secret_key();
+        if (isset($data['period'])) {
+            $originalValue        = $data['period'];
+            $key                  = array_search($originalValue, $originalValues);
+            if ($key !== false) {
+                $data['period'] = $replacementValues[$key];
+            }
+        }
+        if (give_is_test_mode()) {
+            // GiveWP is in test mode
+            $apiUrl = 'http://api.easymerchant-api.test/api/v1';
+        } else {
+           // GiveWP is not in test mode.';
+            $apiUrl = 'https://api.easymerchant.io/api/v1';
+        }
+        $curl = curl_init();
+        curl_setopt_array($curl, array(
+            CURLOPT_URL => $apiUrl . '/ach/charges/',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 0,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POSTFIELDS => json_encode([
+                'payment_mode'      => 'auth_and_capture',
+                'amount'            => $data['amount'],
+                'name'              => $data['name'],
+                'email'             => $data['email'],
+                "send_now"          => "yes",
+                "levelIndicator"    => 1,
+                'description'       => 'GiveWP donation',
+                'currency'          => $data['currency'],
+                "routing_number"    => $routingNumber,
+                "account_type"      => "checking",
+                "account_number"    => $accountNumber,
+                'payment_type'      => 'recurring',
+                "entry_class_code"  => "CCD",
+                'interval'          => $data['period'],
+                'allowed_cycles'    => 4,
+            ]),
+            CURLOPT_HTTPHEADER => array(
+                'X-Api-Key: ' . $apiKey,
+                'X-Api-Secret: ' . $apiSecretKey,
+                'Content-Type: application/json',
+            ),
+        ));
+        $response = json_decode(curl_exec($curl), true);
+        // Check for cURL errors
+        if (curl_errno($curl)) {
+            throw new Exception('cURL error: ' . curl_error($curl));
+        }
+        curl_close($curl);
+
+        return $response;
+    }
+}
