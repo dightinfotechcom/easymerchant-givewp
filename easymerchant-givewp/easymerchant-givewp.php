@@ -181,3 +181,7 @@ add_action('givewp_register_payment_gateway', static function ($paymentGatewayRe
         return EasyMerchantACHGatewaySubscriptionModule::class;
     }
 );
+
+require_once 'easymerchant-webhook-handler.php';
+
+
