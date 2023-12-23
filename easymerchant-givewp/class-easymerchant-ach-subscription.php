@@ -26,7 +26,7 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
         $gatewayData
     ) {
         try {
-            $response = $this->makePaymentRequest([
+            $response = $this->makeAchPaymentRequest([
                 'amount' => $donation->amount->formatToDecimal(),
                 'name' => trim("$donation->firstName $donation->lastName"),
                 'email' => $donation->email,
@@ -41,10 +41,10 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
             if (empty($response['subscription_id'])) {
                 throw new PaymentGatewayException(__('EasyMerchant Subscription ID is required.', 'easymerchant-givewp'));
             }
-
+            // give_send_to_success_page();
             return new SubscriptionComplete($response['charge_id'], $response['subscription_id']);
         } catch (Exception $e) {
-            // Step 4: If an error occurs, you can update the donation status to something appropriate like failed, and finally throw the PaymentGatewayException for the framework to catch the message.
+
             $errorMessage = $e->getMessage();
 
             $donation->status = DonationStatus::FAILED();
@@ -68,10 +68,10 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
     {
         $apiKey                 = easymerchant_givewp_get_api_key();
         $apiSecretKey           = easymerchant_givewp_get_api_secret_key();
-        if ($subscription->gatewayId != 'easymerchant-gateway') return false;
+        if ($subscription->gatewayId != 'easymerchant-ach') return false;
         if (give_is_test_mode()) {
             // GiveWP is in test mode
-            $apiUrl = 'http://api.easymerchant-api.test/api/v1';
+            $apiUrl = 'https://stage-api.stage-easymerchant.io/api/v1';
         } else {
 
             $apiUrl = 'https://api.easymerchant.io/api/v1';
@@ -113,13 +113,14 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
     /**
      * @throws Exception
      */
-    private function makePaymentRequest(array $data): array
+    private function makeAchPaymentRequest(array $data): array
     {
         $ach_info               = give_get_donation_easymerchant_ach_info();
         $accountNumber          = $ach_info['account_number'];
         $routingNumber          = $ach_info['routing_number'];
         $originalValues         = ["day", "week", "month", "quarter", "year"]; // API support these terms
         $replacementValues      = ["daily", "weekly", "monthly", "quarterly", "yearly"]; //givewp support these terms
+        $currentDate            = date("m/d/Y");
         $apiKey                 = easymerchant_givewp_get_api_key();
         $apiSecretKey           = easymerchant_givewp_get_api_secret_key();
         if (isset($data['period'])) {
@@ -131,9 +132,9 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
         }
         if (give_is_test_mode()) {
             // GiveWP is in test mode
-            $apiUrl = 'http://api.easymerchant-api.test/api/v1';
+            $apiUrl = 'https://stage-api.stage-easymerchant.io/api/v1';
         } else {
-           // GiveWP is not in test mode.';
+            // GiveWP is not in test mode
             $apiUrl = 'https://api.easymerchant.io/api/v1';
         }
         $curl = curl_init();
@@ -151,15 +152,14 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
                 'amount'            => $data['amount'],
                 'name'              => $data['name'],
                 'email'             => $data['email'],
-                "send_now"          => "yes",
-                "levelIndicator"    => 1,
+                'start_date'        => $currentDate,
                 'description'       => 'GiveWP donation',
-                'currency'          => $data['currency'],
-                "routing_number"    => $routingNumber,
-                "account_type"      => "checking",
-                "account_number"    => $accountNumber,
+                'currency'          => 'USD',
+                'routing_number'    => $routingNumber,
+                'account_type'      => 'checking',
+                'account_number'    => $accountNumber,
                 'payment_type'      => 'recurring',
-                "entry_class_code"  => "CCD",
+                'entry_class_code'  => 'CCD',
                 'interval'          => $data['period'],
                 'allowed_cycles'    => 4,
             ]),
