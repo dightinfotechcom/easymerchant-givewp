@@ -184,4 +184,45 @@ add_action('givewp_register_payment_gateway', static function ($paymentGatewayRe
 
 require_once 'easymerchant-webhook-handler.php';
 
+// Hook into a WordPress action to register your webhook handler
+add_action('init', 'register_easymerchant_webhook_handler');
+
+function register_easymerchant_webhook_handler()
+{
+    $webhook_url = easymerchant_givewp_get_webhook_url();
+
+    // Instantiate EasyMerchantWebhookHandler with the webhook URL
+    $webhookHandler = new EasyMerchantWebhookHandler($webhook_url);
+
+
+    //  use it in add_rewrite_rule()
+    // add_rewrite_rule('^webhooks/easymerchant/?', 'index.php?easymerchant_webhook=1', 'top');
+
+    // Register the query variable for the custom endpoint
+    add_filter('query_vars', function ($vars) {
+        $vars[] = 'easymerchant';
+        return $vars;
+    });
+
+    // Hook into template_redirect to process the webhook when the custom endpoint is requested
+    add_action('template_redirect', function () use ($webhookHandler) {
+        process_easymerchant_webhook($webhookHandler);
+    });
+}
+
+function process_easymerchant_webhook($webhookHandler)
+{
+    // Check if the custom endpoint is requested
+    if (get_query_var('easymerchant')) {
+        // Get the JSON payload from the request
+        $payload = json_decode(file_get_contents('php://input'), true);
+
+        // Handle the EasyMerchant webhook payload using your webhook handling logic
+        $webhookHandler->handleWebhook($payload);
+
+        // Respond to the webhook
+        status_header(200);
+        exit;
+    }
+}
 
