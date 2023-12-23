@@ -175,7 +175,7 @@ add_action('givewp_register_payment_gateway', static function ($paymentGatewayRe
     }
 );
 
- add_filter("givewp_gateway_easymerchant-ach_subscription_module", static function () {
+ add_filter("givewp_gateway_easymerchant-ach_subscription", static function () {
         include 'class-easymerchant-ach-subscription.php';
 
         return EasyMerchantACHGatewaySubscriptionModule::class;
