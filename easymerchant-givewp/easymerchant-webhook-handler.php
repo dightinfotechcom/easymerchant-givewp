@@ -5,6 +5,7 @@
  */
 class EasyMerchantWebhookHandler
 {
+
     /**
      * Initialize webhook handling
      */
@@ -19,7 +20,7 @@ class EasyMerchantWebhookHandler
      */
     public static function register_webhook_endpoint()
     {
-        register_rest_route('easymerchant-gateway/v1', '/webhook', array(
+        register_rest_route('?webhook-give-listener', 'easymerchant', array(
             'methods' => 'POST',
             'callback' => array(__CLASS__, 'handle_webhook_request'),
         ));
@@ -78,18 +79,25 @@ class EasyMerchantWebhookHandler
         // Process the webhook payload
         $data = json_decode($body, true);
 
-        // Check the event type and handle accordingly
-        if ($data['event'] === 'payment.success') {
-            self::handle_successful_payment($data);
-        } elseif ($data['event'] === 'payment.refunded') {
-            self::handle_payment_refund($data);
-        } elseif ($data['event'] === 'charge.updated') {
-            self::handle_charge_updated($data);
-        }
+        // Check if 'event' key exists in $data
+        if (isset($data['event'])) {
+            // Check the event type and handle accordingly
+            if ($data['event'] === 'payment.success') {
+                self::handle_successful_payment($data);
+            } elseif ($data['event'] === 'payment.refunded') {
+                self::handle_payment_refund($data);
+            } elseif ($data['event'] === 'charge.updated') {
+                self::handle_charge_updated($data);
+            }
 
-        // Send a success response to EasyMerchant
-        status_header(200);
-        exit('Webhook handled successfully');
+            // Send a success response to EasyMerchant
+            status_header(200);
+            exit('Webhook handled successfully');
+        } else {
+            // Handle the case when 'event' key is not present in $data
+            status_header(400);
+            exit('Invalid webhook payload. Missing "event" key.');
+        }
     }
 
     /**
