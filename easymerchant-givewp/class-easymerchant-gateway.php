@@ -9,6 +9,7 @@ use Give\Framework\PaymentGateways\Commands\PaymentComplete;
 use Give\Framework\PaymentGateways\Commands\PaymentRefunded;
 use Give\Framework\PaymentGateways\Exceptions\PaymentGatewayException;
 use Give\Framework\PaymentGateways\PaymentGateway;
+use Give\Framework\Receipts\DonationReceipt;
 
 /**
  * @inheritDoc
@@ -47,32 +48,26 @@ class EasyMerchantGateway extends PaymentGateway
         return __('EasyMerchant', 'easymerchant-givewp');
     }
 
+    public function __invoke(DonationReceipt $receipt): DonationReceipt
+    {
+
+        $this->fillDonationDetails($receipt);
+        return $receipt;
+    }
     /**
      * Display gateway fields for v2 donation forms
      */
     public function getLegacyFormFieldMarkup(int $formId, array $args): string
     {
-        // Step 1: add any gateway fields to the form using html.  In order to retrieve this data later the name of the input must be inside the key gatewayData (name='gatewayData[input_name]').
-        // Step 2: you can alternatively send this data to the $gatewayData param using the filter `givewp_create_payment_gateway_data_{gatewayId}`
+
         // return easymerchant_output_redirect_notice($formId, $args);
         $output1 = easymerchant_output_redirect_notice($formId, $args);
-
         // Call the second function
         $output2 = easymerchant_givewp_custom_credit_card_form($formId);
-
         // Concatenate the results or use any other logic based on your requirements
         $result = $output1 . $output2;
 
         return $result;
-    }
-
-    /**
-     * Register a js file to display gateway fields for v3 donation forms
-     */
-    public function enqueueScript(int $formId)
-    {
-        wp_enqueue_script('easymerchant-gateway-api', 'https://api.easymerchant.io/assets/checkout/easyMerchant.js', [], '1.0.0', true);
-        wp_enqueue_script($this::id(), plugin_dir_url(__FILE__) . 'assets/js/easymerchant-gateway.js', ['easymerchant-gateway-api', 'react', 'wp-element', 'wp-i18n'], '1.0.0', true);
     }
 
     /**
@@ -81,8 +76,7 @@ class EasyMerchantGateway extends PaymentGateway
     public function formSettings(int $formId): array
     {
         return [
-            // 'publishable_key' => 'Ow9CaBwjk23cHGakuhBDl5sj9'
-            'publishable_key' => '280066215f64af12cee5765cb'
+            'publishable_key' => easymerchant_givewp_get_publishable_key()
         ];
     }
 
@@ -92,46 +86,28 @@ class EasyMerchantGateway extends PaymentGateway
     public function createPayment(Donation $donation, $gatewayData): GatewayCommand
     {
         try {
-            $hostedCheckout = give_clean($gatewayData['easymerchant-hosted-checkout']);
-
-            // first check if hosted checkout is enabled
-            if ($hostedCheckout){
-                $chargeId = give_clean($gatewayData['easymerchant-charge-id']);
-
-                if (empty($chargeId)) {
-                    throw new PaymentGatewayException(__('EasyMerchant Charge ID 1 is required.', 'easymerchant-givewp' ) );
-                }
-
-                return new PaymentComplete($chargeId);
-            }
-
-            // if not using hosted checkout make the request with the gateway
             $response = $this->makePaymentRequest([
-                'amount' => $donation->amount->formatToDecimal(),
-                'name' => trim("$donation->firstName $donation->lastName"),
-                'email' => $donation->email,
-                'currency' => $donation->amount->getCurrency(),
-                // TODO get from subscription model in SubscriptionModule
-                'period' => 'month',
+                'amount'    => $donation->amount->formatToDecimal(),
+                'name'      => trim("$donation->firstName $donation->lastName"),
+                'email'     => $donation->email,
+                'currency'  => $donation->amount->getCurrency()->getCode(),
             ]);
 
-            if(empty($response)) {
-                throw new PaymentGatewayException(__('Something went wrong!', 'easymerchant-givewp' ) );
+            if (empty($response)) {
+                throw new PaymentGatewayException(__('Something went wrong!', 'easymerchant-givewp'));
             }
 
-            if(empty($response['status'])) {
-                $message = empty($response['message']) ? 'Something went wrong!' : $response['message'];
-                throw new PaymentGatewayException(__($message, 'easymerchant-givewp' ) );
+            if (empty($response['status'])) {
+                $message = empty($response['message']) ? 'Payment not successful!' : $response['message'];
+                throw new PaymentGatewayException(__($message, 'easymerchant-givewp'));
             }
 
             if (empty($response['charge_id'])) {
-                throw new PaymentGatewayException(__('EasyMerchant Charge ID 2 is required.', 'easymerchant-givewp' ) );
+                throw new PaymentGatewayException(__('EasyMerchant Charge ID is required.', 'easymerchant-givewp'));
             }
 
-            //TODO: Handle subscription ID in subscription Module $response['subscription_id'];
             return new PaymentComplete($response['charge_id']);
         } catch (Exception $e) {
-            // Step 4: If an error occurs, you can update the donation status to something appropriate like failed, and finally throw the PaymentGatewayException for the framework to catch the message.
             $errorMessage = $e->getMessage();
 
             $donation->status = DonationStatus::FAILED();
@@ -141,7 +117,6 @@ class EasyMerchantGateway extends PaymentGateway
                 'donationId' => $donation->id,
                 'content' => sprintf(esc_html__('Donation failed. Reason: %s', 'easymerchant-givewp'), $errorMessage)
             ]);
-
             throw new PaymentGatewayException($errorMessage);
         }
     }
@@ -151,12 +126,67 @@ class EasyMerchantGateway extends PaymentGateway
      */
     public function refundDonation(Donation $donation): PaymentRefunded
     {
-        // Step 1: refund the donation with your gateway.
-        // Step 2: return a command to complete the refund.
-        return new PaymentRefunded();
+        $apiKey                 = easymerchant_givewp_get_api_key();
+        $apiSecretKey           = easymerchant_givewp_get_api_secret_key();
+        if (give_is_test_mode()) {
+            // GiveWP is in test mode
+            $apiUrl = 'https://stage-api.stage-easymerchant.io/api/v1';
+        } else {
+            $apiUrl = 'https://api.easymerchant.io/api/v1';
+        }
+
+        try {
+            $curl = curl_init();
+            curl_setopt_array($curl, array(
+                CURLOPT_URL => $apiUrl . '/refunds',
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_ENCODING => '',
+                CURLOPT_MAXREDIRS => 10,
+                CURLOPT_TIMEOUT => 0,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                CURLOPT_CUSTOMREQUEST => 'POST',
+                CURLOPT_POSTFIELDS => json_encode([
+                    "charge_id" => $donation->gatewayTransactionId
+                ]),
+                CURLOPT_HTTPHEADER => array(
+                    'X-Api-Key: ' . $apiKey,
+                    'X-Api-Secret: ' . $apiSecretKey,
+                    'Content-Type: application/json',
+                ),
+            ));
+
+            $refundResponse = json_decode(curl_exec($curl), true);
+            print_r($refundResponse['message']);
+            print_r($refundResponse['refund_id']);
+            die();
+            // $donation->status = DonationStatus::REFUNDED();
+            // $donation->save();
+            curl_close($curl);
+            return new PaymentRefunded($donation->gatewayTransactionId);
+            // Create DonationNote
+            // if (!empty($refundResponse['refund_id'])) {
+            //     DonationNote::create([
+            //         'donationId' => $donation->id,
+            //         'content'    => sprintf(esc_html__('Donation Refunded. Reason: %s', 'easymerchant-givewp'))
+            //     ]);
+            // }
+            echo "<script>
+            function goBackTimed() {
+                setTimeout(() => {
+                    window.history.go(-1);
+                }, 3000);
+            }
+        </script>";
+        } catch (\Exception $exception) {
+            throw new PaymentGatewayException('Unable to refund. ' . $exception->getMessage(), $exception->getCode(), $exception);
+        }
     }
 
-    /**
+
+
+
+    /**0
      * @throws Exception
      */
     private function makePaymentRequest(array $data): array
@@ -166,49 +196,48 @@ class EasyMerchantGateway extends PaymentGateway
         // Use the card details in this function calling from "give_get_donation_easymerchant_cc_info" function.
         $cc_holder              = $cc_info['card_name'];
         $cc_number              = $cc_info['card_number_easy'];
-        $cardNumber             = str_replace(' ', '', $cc_number);
         $month                  = $cc_info['card_exp_month'];
         $year                   = $cc_info['card_exp_year'];
         $cc_cvc                 = $cc_info['card_cvc'];
-        $currentDate            = date("m/d/Y");
-        $curl = curl_init();
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => 'https://stage-api.stage-easymerchant.io/api/v1/charges/',
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_POSTFIELDS => json_encode([
-                'payment_mode'   => 'auth_and_capture',
-                'amount'         => $data['amount'],
-                'name'           => $data['name'],
-                'email'          => $data['email'],
-                'description'    => 'test',
-                'start_date'     => $currentDate,
-                'currency'       => $data['currency'],
-                'card_number'    => $cardNumber,
-                'exp_month'      => $month,
-                'exp_year'       => $year,
-                'cvc'            => $cc_cvc,
-                'cardholder_name' => $cc_holder,
-                'payment_type'   => 'charge',
-            ]),
-            CURLOPT_HTTPHEADER => array(
-                'X-Api-Key: doggiedaycareKxYeMhRl',
-                'X-Api-Secret: doggiedaycareIBagbKnt',
-                'Content-Type: application/json',
-            ),
-        ));
-        $response = json_decode(curl_exec($curl), true);
-        // Check for cURL errors
-        if (curl_errno($curl)) {
-            throw new Exception('cURL error: ' . curl_error($curl));
-        }
-        curl_close($curl);
+        $apiKey                 = easymerchant_givewp_get_api_key();
+        $apiSecretKey           = easymerchant_givewp_get_api_secret_key();
 
-        return $response;
+        if (give_is_test_mode()) {
+            // GiveWP is in test mode
+            $apiUrl = 'https://stage-api.stage-easymerchant.io/api/v1';
+        } else {
+            // GiveWP is not in test mode
+            $apiUrl = 'https://api.easymerchant.io/api/v1';
+        }
+
+
+        $body = json_encode([
+            'payment_mode'   => 'auth_and_capture',
+            'amount'         => $data['amount'],
+            'name'           => $data['name'],
+            'email'          => $data['email'],
+            'description'    => 'GiveWp Donation',
+            'currency'       => $data['currency'],
+            'card_number'    => $cc_number,
+            'exp_month'      => $month,
+            'exp_year'       => $year,
+            'cvc'            => $cc_cvc,
+            'cardholder_name' => $cc_holder,
+        ]);
+
+        $response = wp_remote_post($apiUrl . '/charges/', array(
+            'method'    => 'POST',
+            'headers'   => array(
+                'X-Api-Key'      => $apiKey,
+                'X-Api-Secret'   => $apiSecretKey,
+                'Content-Type'   => 'application/json',
+            ),
+            'body'               => $body,
+        ));
+
+
+        $response_body = wp_remote_retrieve_body($response);
+        $response_data = json_decode($response_body, true);
+        return $response_data;
     }
 }

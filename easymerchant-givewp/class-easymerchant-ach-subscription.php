@@ -9,6 +9,7 @@ use Give\Framework\PaymentGateways\Exceptions\PaymentGatewayException;
 use Give\Framework\PaymentGateways\SubscriptionModule;
 use Give\Subscriptions\Models\Subscription;
 use Give\Subscriptions\ValueObjects\SubscriptionStatus;
+use Give\Framework\PaymentGateways\Commands\SubscriptionProcessing;
 
 /**
  * @inheritDoc
@@ -26,7 +27,7 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
         $gatewayData
     ) {
         try {
-            $response = $this->makeAchPaymentRequest([
+            $response = $this->getEasymerchantACHPayment([
                 'amount' => $donation->amount->formatToDecimal(),
                 'name' => trim("$donation->firstName $donation->lastName"),
                 'email' => $donation->email,
@@ -41,8 +42,11 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
             if (empty($response['subscription_id'])) {
                 throw new PaymentGatewayException(__('EasyMerchant Subscription ID is required.', 'easymerchant-givewp'));
             }
-            // give_send_to_success_page();
-            return new SubscriptionComplete($response['charge_id'], $response['subscription_id']);
+            EasyMerchantWebhookHandler::handle_successful_subscription([
+                'subscription_id' => $response['subscription_id'],
+                'charge_id' => $response['charge_id'],
+            ]);
+            return new SubscriptionProcessing($response['subscription_id'], $response['charge_id']);
         } catch (Exception $e) {
 
             $errorMessage = $e->getMessage();
@@ -113,21 +117,21 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
     /**
      * @throws Exception
      */
-    private function makeAchPaymentRequest(array $data): array
+    private function getEasymerchantACHPayment(array $data): array
     {
         $ach_info               = give_get_donation_easymerchant_ach_info();
         $accountNumber          = $ach_info['account_number'];
         $routingNumber          = $ach_info['routing_number'];
-        $originalValues         = ["day", "week", "month", "quarter", "year"]; // API support these terms
-        $replacementValues      = ["daily", "weekly", "monthly", "quarterly", "yearly"]; //givewp support these terms
-        $currentDate            = date("m/d/Y");
+        $accountType            = $ach_info['account_type'];
         $apiKey                 = easymerchant_givewp_get_api_key();
         $apiSecretKey           = easymerchant_givewp_get_api_secret_key();
+        $originalValues         = ["daily", "weekly", "monthly", "quarterly", "yearly"]; // API support these terms
+        $replacementValues      = ["day", "week", "month", "quarter", "year"]; //givewp support these terms
         if (isset($data['period'])) {
             $originalValue        = $data['period'];
-            $key                  = array_search($originalValue, $originalValues);
+            $key                  = array_search($originalValue, $replacementValues);
             if ($key !== false) {
-                $data['period'] = $replacementValues[$key];
+                $data['period'] = $originalValues[$key];
             }
         }
         if (give_is_test_mode()) {
@@ -152,11 +156,10 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
                 'amount'            => $data['amount'],
                 'name'              => $data['name'],
                 'email'             => $data['email'],
-                'start_date'        => $currentDate,
                 'description'       => 'GiveWP donation',
-                'currency'          => 'USD',
+                'currency'          => $data['currency'],
                 'routing_number'    => $routingNumber,
-                'account_type'      => 'checking',
+                'account_type'      => $accountType,
                 'account_number'    => $accountNumber,
                 'payment_type'      => 'recurring',
                 'entry_class_code'  => 'CCD',

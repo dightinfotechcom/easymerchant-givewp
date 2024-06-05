@@ -6,12 +6,15 @@ use Give\Donations\ValueObjects\DonationStatus;
 use Give\Framework\Exceptions\Primitives\Exception;
 use Give\Framework\PaymentGateways\Commands\GatewayCommand;
 use Give\Framework\PaymentGateways\Commands\PaymentRefunded;
+// use Give\Framework\PaymentGateways\Commands\PaymentComplete;
 use Give\Framework\PaymentGateways\Exceptions\PaymentGatewayException;
 use Give\Framework\PaymentGateways\PaymentGateway;
+use Give\Framework\PaymentGateways\Commands\PaymentProcessing;
 
 
 class EasyMerchantACH extends PaymentGateway
 {
+
     /**
      * @inheritDoc
      */
@@ -52,7 +55,12 @@ class EasyMerchantACH extends PaymentGateway
         return easymerchant_givewp_custom_ach_form($formId);
     }
 
-
+    public function formSettings(int $formId): array
+    {
+        return [
+            'publishable_key' => easymerchant_givewp_get_publishable_key()
+        ];
+    }
 
 
     /**
@@ -64,23 +72,34 @@ class EasyMerchantACH extends PaymentGateway
             $response = $this->getEasymerchantACHPayment([
                 'amount'         => $donation->amount->formatToDecimal(),
                 'name'           => trim("$donation->firstName $donation->lastName"),
-                'account_number' => $donation->account_number,
-                'routing_number' => $donation->routing_number,
+                'email'          => $donation->email,
+                'currency'       => $donation->amount->getCurrency()->getCode(),
             ]);
+
+
             if (empty($response)) {
-                throw new PaymentGatewayException(__('Something went wrong!', 'easymerchant-givewp'));
+                throw new PaymentGatewayException(__('Response not returned!', 'easymerchant-givewp'));
             }
 
             if (empty($response['status'])) {
-                $message = empty($response['message']) ? 'Something went wrong!' : $response['message'];
+                $message = empty($response['message']) ? 'Payment Not Successful!' : $response['message'];
                 throw new PaymentGatewayException(__($message, 'easymerchant-givewp'));
             }
 
             if (empty($response['charge_id'])) {
                 throw new PaymentGatewayException(__('EasyMerchant Charge ID is required.', 'easymerchant-givewp'));
             }
-            
-            return new PaymentComplete($response['charge_id']);
+
+            // return new PaymentProcessing($response['charge_id']);
+            // Invoke the webhook handler for successful payment
+            EasyMerchantWebhookHandler::handle_successful_payment([
+                'reference_number' => $response['charge_id'],
+                'amount'           => $donation->amount->formatToDecimal(),
+                'status'           => 'Paid',
+            ]);
+
+            // Return the PaymentProcessing object
+            return new PaymentProcessing($response['charge_id']);
         } catch (Exception $e) {
             $errorMessage = $e->getMessage();
             $donation->status = DonationStatus::FAILED();
@@ -93,11 +112,6 @@ class EasyMerchantACH extends PaymentGateway
             throw new PaymentGatewayException($errorMessage);
         }
     }
-
-
-
-
-
     /**
      * @inerhitDoc
      */
@@ -111,8 +125,10 @@ class EasyMerchantACH extends PaymentGateway
         } else {
             $apiUrl = 'https://api.easymerchant.io/api/v1';
         }
+
         try {
             $curl = curl_init();
+
             curl_setopt_array($curl, array(
                 CURLOPT_URL => $apiUrl . '/refunds',
                 CURLOPT_RETURNTRANSFER => true,
@@ -122,41 +138,36 @@ class EasyMerchantACH extends PaymentGateway
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
                 CURLOPT_CUSTOMREQUEST => 'POST',
-                CURLOPT_POSTFIELDS => json_encode([
-                    "charge_id" => $donation->gatewayTransactionId
-                ]),
+                CURLOPT_POSTFIELDS => json_encode(['charge_id' => $donation->gatewayTransactionId]),
                 CURLOPT_HTTPHEADER => array(
                     'X-Api-Key: ' . $apiKey,
                     'X-Api-Secret: ' . $apiSecretKey,
                     'Content-Type: application/json',
                 ),
-                CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_FAILONERROR => true,
             ));
 
             $response = json_decode(curl_exec($curl), true);
-
-            // Check for errors in the response
-            if (isset($response['success']) && $response['success']) {
-                $donation->status = DonationStatus::REFUNDED();
-                $donation->save();
-                return new PaymentRefunded();
-            } else {
-                // Handle error appropriately
-                throw new PaymentGatewayException('Refund failed: ' . json_encode($response));
-            }
+            curl_close($curl);
+            return new PaymentRefunded();
+            // $donation->status = DonationStatus::REFUNDED();
+            // $donation->save();
+            // Create DonationNote
+            // if (!empty($response['refund_id'])) {
+            //     DonationNote::create([
+            //         'donationId' => $donation->id,
+            //         'content'    => sprintf(esc_html__('Donation Refunded. Reason: %s', 'easymerchant-givewp'))
+            //     ]);
+            // }
         } catch (\Exception $exception) {
             throw new PaymentGatewayException('Unable to refund. ' . $exception->getMessage(), $exception->getCode(), $exception);
-        } finally {
-            curl_close($curl);
-        }  
+        }
     }
-
-    private function getEasymerchantACHPayment(array $donation): array
+    private function getEasymerchantACHPayment(array $data): array
     {
         $ach_info               = give_get_donation_easymerchant_ach_info();
         $accountNumber          = $ach_info['account_number'];
         $routingNumber          = $ach_info['routing_number'];
+        $accountType            = $ach_info['account_type'];
         $apiKey                 = easymerchant_givewp_get_api_key();
         $apiSecretKey           = easymerchant_givewp_get_api_secret_key();
 
@@ -180,12 +191,12 @@ class EasyMerchantACH extends PaymentGateway
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_CUSTOMREQUEST => 'POST',
             CURLOPT_POSTFIELDS => json_encode([
-                'amount'            => $donation['amount'],
-                "name"              => $donation['name'],
+                "amount"            => $data['amount'],
+                "name"              => $data['name'],
                 "description"       => "ACH Donation From GiveWP",
                 "routing_number"    => $routingNumber,
                 "account_number"    => $accountNumber,
-                "account_type"      => "checking",
+                "account_type"      => $accountType,
                 "entry_class_code"  => "WEB",
             ]),
             CURLOPT_HTTPHEADER => array(
@@ -196,6 +207,7 @@ class EasyMerchantACH extends PaymentGateway
         ));
 
         $response = json_decode(curl_exec($curl), true);
+
         // Check for cURL errors
         if (curl_errno($curl)) {
             throw new Exception('cURL error: ' . curl_error($curl));

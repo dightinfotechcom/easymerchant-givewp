@@ -27,11 +27,6 @@ function easymerchant_givewp_supported_payment_methods()
 {
     return [
         'easymerchant',
-        'easymerchant_ach',
-        'easymerchant_crypto',
-        'easymerchant_google_pay',
-        'easymerchant_apple_pay',
-        'easymerchant_checkout'
     ];
 }
 
