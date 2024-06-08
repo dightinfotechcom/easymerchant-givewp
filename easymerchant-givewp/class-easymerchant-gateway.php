@@ -136,41 +136,25 @@ class EasyMerchantGateway extends PaymentGateway
         }
 
         try {
-            $curl = curl_init();
-            curl_setopt_array($curl, array(
-                CURLOPT_URL => $apiUrl . '/refunds',
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => 'POST',
-                CURLOPT_POSTFIELDS => json_encode([
-                    "charge_id" => $donation->gatewayTransactionId
-                ]),
-                CURLOPT_HTTPHEADER => array(
-                    'X-Api-Key: ' . $apiKey,
-                    'X-Api-Secret: ' . $apiSecretKey,
-                    'Content-Type: application/json',
+
+            $body = json_encode([
+                "charge_id" => $donation->gatewayTransactionId
+            ]);
+            $response = wp_remote_post($apiUrl . '/refunds/', array(
+                'method'    => 'POST',
+                'headers'   => array(
+                    'X-Api-Key'      => $apiKey,
+                    'X-Api-Secret'   => $apiSecretKey,
+                    'Content-Type'   => 'application/json',
                 ),
+                'body'               => $body,
             ));
 
-            $refundResponse = json_decode(curl_exec($curl), true);
-            print_r($refundResponse['message']);
-            print_r($refundResponse['refund_id']);
-            die();
-            // $donation->status = DonationStatus::REFUNDED();
-            // $donation->save();
-            curl_close($curl);
+
+            $response_body = wp_remote_retrieve_body($response);
+            $response_data = json_decode($response_body, true);
             return new PaymentRefunded($donation->gatewayTransactionId);
-            // Create DonationNote
-            // if (!empty($refundResponse['refund_id'])) {
-            //     DonationNote::create([
-            //         'donationId' => $donation->id,
-            //         'content'    => sprintf(esc_html__('Donation Refunded. Reason: %s', 'easymerchant-givewp'))
-            //     ]);
-            // }
+
             echo "<script>
             function goBackTimed() {
                 setTimeout(() => {

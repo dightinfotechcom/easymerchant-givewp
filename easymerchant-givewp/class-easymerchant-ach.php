@@ -6,7 +6,6 @@ use Give\Donations\ValueObjects\DonationStatus;
 use Give\Framework\Exceptions\Primitives\Exception;
 use Give\Framework\PaymentGateways\Commands\GatewayCommand;
 use Give\Framework\PaymentGateways\Commands\PaymentRefunded;
-// use Give\Framework\PaymentGateways\Commands\PaymentComplete;
 use Give\Framework\PaymentGateways\Exceptions\PaymentGatewayException;
 use Give\Framework\PaymentGateways\PaymentGateway;
 use Give\Framework\PaymentGateways\Commands\PaymentProcessing;
@@ -90,13 +89,12 @@ class EasyMerchantACH extends PaymentGateway
                 throw new PaymentGatewayException(__('EasyMerchant Charge ID is required.', 'easymerchant-givewp'));
             }
 
-            // return new PaymentProcessing($response['charge_id']);
             // Invoke the webhook handler for successful payment
-            EasyMerchantWebhookHandler::handle_successful_payment([
-                'reference_number' => $response['charge_id'],
-                'amount'           => $donation->amount->formatToDecimal(),
-                'status'           => 'Paid',
-            ]);
+            // EasyMerchantWebhookHandler::handle_successful_payment([
+            //     'reference_number' => $response['charge_id'],
+            //     'amount'           => $donation->amount->formatToDecimal(),
+            //     'status'           => 'Paid',
+            // ]);
 
             // Return the PaymentProcessing object
             return new PaymentProcessing($response['charge_id']);
@@ -127,37 +125,30 @@ class EasyMerchantACH extends PaymentGateway
         }
 
         try {
-            $curl = curl_init();
-
-            curl_setopt_array($curl, array(
-                CURLOPT_URL => $apiUrl . '/refunds',
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => 'POST',
-                CURLOPT_POSTFIELDS => json_encode(['charge_id' => $donation->gatewayTransactionId]),
-                CURLOPT_HTTPHEADER => array(
-                    'X-Api-Key: ' . $apiKey,
-                    'X-Api-Secret: ' . $apiSecretKey,
-                    'Content-Type: application/json',
+            $body = json_encode([
+                "charge_id" => $donation->gatewayTransactionId
+            ]);
+            $response = wp_remote_post($apiUrl . '/refunds/', array(
+                'method'    => 'POST',
+                'headers'   => array(
+                    'X-Api-Key'      => $apiKey,
+                    'X-Api-Secret'   => $apiSecretKey,
+                    'Content-Type'   => 'application/json',
                 ),
+                'body'               => $body,
             ));
 
-            $response = json_decode(curl_exec($curl), true);
-            curl_close($curl);
+
+            $response_body = wp_remote_retrieve_body($response);
+            $response_data = json_decode($response_body, true);
             return new PaymentRefunded();
-            // $donation->status = DonationStatus::REFUNDED();
-            // $donation->save();
-            // Create DonationNote
-            // if (!empty($response['refund_id'])) {
-            //     DonationNote::create([
-            //         'donationId' => $donation->id,
-            //         'content'    => sprintf(esc_html__('Donation Refunded. Reason: %s', 'easymerchant-givewp'))
-            //     ]);
-            // }
+            echo "<script>
+            function goBackTimed() {
+                setTimeout(() => {
+                    window.history.go(-1);
+                }, 3000);
+            }
+        </script>";
         } catch (\Exception $exception) {
             throw new PaymentGatewayException('Unable to refund. ' . $exception->getMessage(), $exception->getCode(), $exception);
         }
@@ -179,40 +170,29 @@ class EasyMerchantACH extends PaymentGateway
             $apiUrl = 'https://api.easymerchant.io/api/v1';
         }
 
-        $curl = curl_init();
-
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => $apiUrl . '/ach/charge/',
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_POSTFIELDS => json_encode([
-                "amount"            => $data['amount'],
-                "name"              => $data['name'],
-                "description"       => "ACH Donation From GiveWP",
-                "routing_number"    => $routingNumber,
-                "account_number"    => $accountNumber,
-                "account_type"      => $accountType,
-                "entry_class_code"  => "WEB",
-            ]),
-            CURLOPT_HTTPHEADER => array(
-                'X-Api-Key: ' . $apiKey,
-                'X-Api-Secret: ' . $apiSecretKey,
-                'Content-Type: application/json',
+        $body = json_encode([
+            "amount"            => $data['amount'],
+            "name"              => $data['name'],
+            'email'             => $data['email'],
+            "description"       => "ACH Donation From GiveWP",
+            "routing_number"    => $routingNumber,
+            "account_number"    => $accountNumber,
+            "account_type"      => $accountType,
+            "entry_class_code"  => "WEB",
+        ]);
+        $response = wp_remote_post($apiUrl . '/ach/charge/', array(
+            'method'    => 'POST',
+            'headers'   => array(
+                'X-Api-Key'      => $apiKey,
+                'X-Api-Secret'   => $apiSecretKey,
+                'Content-Type'   => 'application/json',
             ),
+            'body'               => $body,
         ));
 
-        $response = json_decode(curl_exec($curl), true);
 
-        // Check for cURL errors
-        if (curl_errno($curl)) {
-            throw new Exception('cURL error: ' . curl_error($curl));
-        }
-        curl_close($curl);
-        return $response;
+        $response_body = wp_remote_retrieve_body($response);
+        $response_data = json_decode($response_body, true);
+        return $response_data;
     }
 }

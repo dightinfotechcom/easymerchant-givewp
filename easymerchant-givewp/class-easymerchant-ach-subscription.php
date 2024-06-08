@@ -42,10 +42,10 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
             if (empty($response['subscription_id'])) {
                 throw new PaymentGatewayException(__('EasyMerchant Subscription ID is required.', 'easymerchant-givewp'));
             }
-            EasyMerchantWebhookHandler::handle_successful_subscription([
-                'subscription_id' => $response['subscription_id'],
-                'charge_id' => $response['charge_id'],
-            ]);
+            // EasyMerchantWebhookHandler::handle_successful_subscription([
+            //     'subscription_id' => $response['subscription_id'],
+            //     'charge_id' => $response['charge_id'],
+            // ]);
             return new SubscriptionProcessing($response['subscription_id'], $response['charge_id']);
         } catch (Exception $e) {
 
@@ -82,23 +82,19 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
         }
         try {
             // Step 1: cancel the subscription with your gateway.
-            $curl = curl_init();
-            curl_setopt_array($curl, array(
-                CURLOPT_URL => $apiUrl . '/subscriptions/' . $subscription->gatewaySubscriptionId . '/cancel/',
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => 'POST',
-                CURLOPT_HTTPHEADER => array(
-                    'X-Api-Key: ' . $apiKey,
-                    'X-Api-Secret: ' . $apiSecretKey,
-                    'Content-Type: application/json',
+            $response = wp_remote_post($apiUrl . '/subscriptions/' . $subscription->gatewaySubscriptionId . '/cancel/', array(
+                'method'    => 'POST',
+                'headers'   => array(
+                    'X-Api-Key'      => $apiKey,
+                    'X-Api-Secret'   => $apiSecretKey,
+                    'Content-Type'   => 'application/json',
                 ),
+                // 'body'               => $body,
             ));
-            $response = json_decode(curl_exec($curl), true);
+
+
+            $response_body = wp_remote_retrieve_body($response);
+            $response_data = json_decode($response_body, true);
             // Step 2: update the subscription status to cancelled.
             $subscription->status = SubscriptionStatus::CANCELLED();
             $subscription->save();
@@ -141,44 +137,33 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
             // GiveWP is not in test mode
             $apiUrl = 'https://api.easymerchant.io/api/v1';
         }
-        $curl = curl_init();
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => $apiUrl . '/ach/charge/',
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_POSTFIELDS => json_encode([
-                'payment_mode'      => 'auth_and_capture',
-                'amount'            => $data['amount'],
-                'name'              => $data['name'],
-                'email'             => $data['email'],
-                'description'       => 'GiveWP donation',
-                'currency'          => $data['currency'],
-                'routing_number'    => $routingNumber,
-                'account_type'      => $accountType,
-                'account_number'    => $accountNumber,
-                'payment_type'      => 'recurring',
-                'entry_class_code'  => 'CCD',
-                'interval'          => $data['period'],
-                'allowed_cycles'    => 4,
-            ]),
-            CURLOPT_HTTPHEADER => array(
-                'X-Api-Key: ' . $apiKey,
-                'X-Api-Secret: ' . $apiSecretKey,
-                'Content-Type: application/json',
-            ),
-        ));
-        $response = json_decode(curl_exec($curl), true);
-        // Check for cURL errors
-        if (curl_errno($curl)) {
-            throw new Exception('cURL error: ' . curl_error($curl));
-        }
-        curl_close($curl);
 
-        return $response;
+        $body = json_encode([
+            'payment_mode'      => 'auth_and_capture',
+            'amount'            => $data['amount'],
+            'name'              => $data['name'],
+            'email'             => $data['email'],
+            'description'       => 'GiveWP donation',
+            'currency'          => $data['currency'],
+            'routing_number'    => $routingNumber,
+            'account_type'      => $accountType,
+            'account_number'    => $accountNumber,
+            'payment_type'      => 'recurring',
+            'entry_class_code'  => 'CCD',
+            'interval'          => $data['period'],
+            'allowed_cycles'    => 4,
+        ]);
+        $response = wp_remote_post($apiUrl . '/ach/charge/', array(
+            'method'    => 'POST',
+            'headers'   => array(
+                'X-Api-Key'      => $apiKey,
+                'X-Api-Secret'   => $apiSecretKey,
+                'Content-Type'   => 'application/json',
+            ),
+            'body'               => $body,
+        ));
+        $response_body = wp_remote_retrieve_body($response);
+        $response_data = json_decode($response_body, true);
+        return $response_data;
     }
 }

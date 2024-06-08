@@ -4,7 +4,7 @@
  * Plugin Name:  		EasyMerchant GiveWP
  * Plugin URI:        	https://easymerchant.io/
  * Description:        	Adds the Easymerchant.io payment gateway to the available GiveWP payment methods.
- * Version:            	1.0.3
+ * Version:            	2.0.3
  * Requires at least:   4.9
  * Requires PHP:        5.6
  * Author:            	EasyMerchant
@@ -22,15 +22,15 @@ if (!defined('ABSPATH')) {
 
 // Plugin constants.
 if (!defined('EASYMERCHANT_FOR_GIVE_VERSION')) {
-    define('EASYMERCHANT_FOR_GIVE_VERSION', '1.0.3');
+    define('EASYMERCHANT_FOR_GIVE_VERSION', '2.0.3');
 }
 
 
 easymerchant_givewp_includes();
-add_action('init', 'test');
+add_action('init', 'webhook_file_callback');
 
 
-function test()
+function webhook_file_callback()
 {
     if (isset($_GET['give-listener']) && $_GET['give-listener'] == 'easymerchant') {
         $rawRequestBody = file_get_contents("php://input");

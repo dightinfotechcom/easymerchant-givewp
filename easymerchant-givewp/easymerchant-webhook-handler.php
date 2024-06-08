@@ -19,8 +19,6 @@ class EasyMerchantWebhookHandler
 
     public function process_webhook()
     {
-        // print_r(get_query_var('easymerchant'));
-        // die();
         if (get_query_var('easymerchant')) {
             $payload = json_decode(file_get_contents('php://input'), true);
             if ($payload === null) {
@@ -251,65 +249,6 @@ class EasyMerchantWebhookHandler
         ]);
 
         $subscription = new Give_Subscription($results[0]->id);
-
-
-
-        // if (give_is_test_mode()) {
-        //     $apiUrl = 'https://stage-api.stage-easymerchant.io/api/v1';
-        // } else {
-        //     $apiUrl = 'https://api.easymerchant.io/api/v1';
-        // }
-
-        // $curl = curl_init();
-        // curl_setopt_array($curl, array(
-        //     CURLOPT_URL => $apiUrl . '/subscriptions/' . $subscription_id . '/renew',
-        //     CURLOPT_RETURNTRANSFER => true,
-        //     CURLOPT_ENCODING => '',
-        //     CURLOPT_MAXREDIRS => 10,
-        //     CURLOPT_TIMEOUT => 0,
-        //     CURLOPT_FOLLOWLOCATION => true,
-        //     CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-        //     CURLOPT_CUSTOMREQUEST => 'POST',
-        //     CURLOPT_POSTFIELDS => json_encode([
-
-        //         "amount" => $amount,
-        //         "subscription_id" => $subscription_id,
-        //         "date" => $date_next_renewal,
-        //         "payment_type" => $payment_method,
-        //     ]),
-        //     CURLOPT_HTTPHEADER => array(
-        //         'X-Api-Key: ' . $apiKey,
-        //         'X-Api-Secret: ' . $apiSecretKey,
-        //         'Content-Type: application/json',
-        //     ),
-        // ));
-
-        // $response = curl_exec($curl);
-        // $curl = curl_init();
-        // curl_setopt_array($curl, array(
-        //     CURLOPT_URL               => get_site_url() . '/easymerchant?give-listener=easymerchant',
-        //     CURLOPT_RETURNTRANSFER    => true,
-        //     CURLOPT_ENCODING          => '',
-        //     CURLOPT_MAXREDIRS         => 10,
-        //     CURLOPT_TIMEOUT           => 0,
-        //     CURLOPT_FOLLOWLOCATION    => true,
-        //     CURLOPT_HTTP_VERSION      => CURL_HTTP_VERSION_1_1,
-        //     CURLOPT_CUSTOMREQUEST     => 'POST',
-        //     CURLOPT_POSTFIELDS        => json_encode([
-        //         "subscription_id"     => $subscription_id,
-        //         // "status"              => $status,
-        //         // "paid_count"          => $paid_count,
-        //         "amount"              => $amount,
-        //         "payment_type"        => $payment_method,
-        //         "date_next_renewal"   => $date_next_renewal,
-        //     ]),
-        //     CURLOPT_HTTPHEADER => array(
-        //         'Content-Type: application/json'
-        //     ),
-        // ));
-
-        // $response = curl_exec($curl);
-        // $respons = json_decode($response);
         if ($status === 'Active') {
             $post_date =  0;
             $payment = $subscription->add_payment(array(
@@ -321,9 +260,6 @@ class EasyMerchantWebhookHandler
             print_r($data);
             die();
         }
-        // print_r($response);
-        // die();
-        // curl_close($curl);
     }
 
 

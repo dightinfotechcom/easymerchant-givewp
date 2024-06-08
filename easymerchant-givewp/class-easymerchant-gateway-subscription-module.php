@@ -9,7 +9,6 @@ use Give\Framework\PaymentGateways\Exceptions\PaymentGatewayException;
 use Give\Framework\PaymentGateways\SubscriptionModule;
 use Give\Subscriptions\Models\Subscription;
 use Give\Subscriptions\ValueObjects\SubscriptionStatus;
-// use Give\Subscriptions\Actions\GenerateNextRenewalForSubscription;
 
 /**
  * @inheritDoc
@@ -79,23 +78,19 @@ class EasyMerchantGatewaySubscriptionModule extends SubscriptionModule
         }
         try {
             // Step 1: cancel the subscription with your gateway.
-            $curl = curl_init();
-            curl_setopt_array($curl, array(
-                CURLOPT_URL => $apiUrl . '/subscriptions/' . $subscription->gatewaySubscriptionId . '/cancel/',
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => 'POST',
-                CURLOPT_HTTPHEADER => array(
-                    'X-Api-Key: ' . $apiKey,
-                    'X-Api-Secret: ' . $apiSecretKey,
-                    'Content-Type: application/json',
+            $response = wp_remote_post($apiUrl . '/subscriptions/' . $subscription->gatewaySubscriptionId . '/cancel/', array(
+                'method'    => 'POST',
+                'headers'   => array(
+                    'X-Api-Key'      => $apiKey,
+                    'X-Api-Secret'   => $apiSecretKey,
+                    'Content-Type'   => 'application/json',
                 ),
+                // 'body'               => $body,
             ));
-            $response = json_decode(curl_exec($curl), true);
+
+
+            $response_body = wp_remote_retrieve_body($response);
+            $response_data = json_decode($response_body, true);
             // Step 2: update the subscription status to cancelled.
             $subscription->status = SubscriptionStatus::CANCELLED();
             $subscription->save();
@@ -133,23 +128,19 @@ class EasyMerchantGatewaySubscriptionModule extends SubscriptionModule
         }
         try {
             // Step 1: Renew the subscription with your gateway.
-            $curl = curl_init();
-            curl_setopt_array($curl, array(
-                CURLOPT_URL => $apiUrl . '/subscriptions/' . $subscription->gatewaySubscriptionId . '/renew/',
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => 'POST',
-                CURLOPT_HTTPHEADER => array(
-                    'X-Api-Key: ' . $apiKey,
-                    'X-Api-Secret: ' . $apiSecretKey,
-                    'Content-Type: application/json',
+            $response = wp_remote_post($apiUrl . '/subscriptions/' . $subscription->gatewaySubscriptionId . '/renew/', array(
+                'method'    => 'POST',
+                'headers'   => array(
+                    'X-Api-Key'      => $apiKey,
+                    'X-Api-Secret'   => $apiSecretKey,
+                    'Content-Type'   => 'application/json',
                 ),
+                // 'body'               => $body,
             ));
-            $response = json_decode(curl_exec($curl), true);
+
+
+            $response_body = wp_remote_retrieve_body($response);
+            $response_data = json_decode($response_body, true);
             $subscription->status = SubscriptionStatus::RENEWED();
             $subscription->save();
         } catch (\Exception $exception) {
@@ -225,6 +216,7 @@ class EasyMerchantGatewaySubscriptionModule extends SubscriptionModule
         ));
         $response_body = wp_remote_retrieve_body($response);
         $response_data = json_decode($response_body, true);
+
         return $response_data;
     }
 }
