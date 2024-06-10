@@ -128,26 +128,66 @@ class EasyMerchantACH extends PaymentGateway
             $body = json_encode([
                 "charge_id" => $donation->gatewayTransactionId
             ]);
-            $response = wp_remote_post($apiUrl . '/refunds/', array(
-                'method'    => 'POST',
+
+            $checkStatusApi = wp_remote_post($apiUrl . '/charges/' . $donation->gatewayTransactionId, array(
+                'method'    => 'GET',
                 'headers'   => array(
-                    'X-Api-Key'      => $apiKey,
-                    'X-Api-Secret'   => $apiSecretKey,
-                    'Content-Type'   => 'application/json',
-                ),
-                'body'               => $body,
+                    'X-Api-Key'     => $apiKey,
+                    'X-Api-Secret'  => $apiSecretKey,
+                    'Content-Type'  => 'application/json',
+                )
             ));
+            $checkPaidUnsetteled = wp_remote_retrieve_body($checkStatusApi);
+            $checkStatus = json_decode($checkPaidUnsetteled, true);
 
+            if ($checkStatus['data']['status'] === 'Paid') {
+                $response = wp_remote_post($apiUrl . '/refunds/', array(
+                    'method'    => 'POST',
+                    'headers'   => array(
+                        'X-Api-Key'      => $apiKey,
+                        'X-Api-Secret'   => $apiSecretKey,
+                        'Content-Type'   => 'application/json',
+                    ),
+                    'body'               => $body,
+                ));
 
-            $response_body = wp_remote_retrieve_body($response);
-            $response_data = json_decode($response_body, true);
-            return new PaymentRefunded();
+                $response_body = wp_remote_retrieve_body($response);
+                $response_data = json_decode($response_body, true);
+                $donation->status = DonationStatus::REFUNDED();
+                DonationNote::create([
+                    'donationId' => $donation->id,
+                    'content' => sprintf(esc_html__('Refund processed successfully. Reason: %s', 'easymerchant-givewp'), 'refund')
+                ]);
+            } else if ($checkStatus['data']['status'] === 'Paid Unsettled') {
+                $response = wp_remote_post($apiUrl . ' /ach/cancel/', array(
+                    'method'    => 'POST',
+                    'headers'   => array(
+                        'X-Api-Key'      => $apiKey,
+                        'X-Api-Secret'   => $apiSecretKey,
+                        'Content-Type'   => 'application/json',
+                    ),
+                    'body'               => json_encode(
+                        [
+                            "charge_id" => $donation->gatewayTransactionId,
+                            "cancel_reason" => "Paid Unsettled"
+                        ]
+                    ),
+                ));
+
+                $response_body = wp_remote_retrieve_body($response);
+                $response_data = json_decode($response_body, true);
+                // $donation->status = DonationStatus::CANCELLED();
+                DonationNote::create([
+                    'donationId' => $donation->id,
+                    'content' => sprintf(esc_html__('ACH Payment cancelled successfully. Reason: %s', 'easymerchant-givewp'), 'paid unsettled')
+                ]);
+            }
+            // return new PaymentRefunded($donation->gatewayTransactionId);
+
             echo "<script>
-            function goBackTimed() {
                 setTimeout(() => {
                     window.history.go(-1);
-                }, 3000);
-            }
+                }, 1000);
         </script>";
         } catch (\Exception $exception) {
             throw new PaymentGatewayException('Unable to refund. ' . $exception->getMessage(), $exception->getCode(), $exception);
