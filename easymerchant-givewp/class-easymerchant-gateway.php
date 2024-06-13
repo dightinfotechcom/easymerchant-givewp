@@ -89,6 +89,8 @@ class EasyMerchantGateway extends PaymentGateway
             $response = $this->makePaymentRequest([
                 'amount'    => $donation->amount->formatToDecimal(),
                 'name'      => trim("$donation->firstName $donation->lastName"),
+                'firstName' => $donation->firstName,
+                // 'lastName'  => $donation->lastName,
                 'email'     => $donation->email,
                 'currency'  => $donation->amount->getCurrency()->getCode(),
             ]);
@@ -126,6 +128,7 @@ class EasyMerchantGateway extends PaymentGateway
      */
     public function refundDonation(Donation $donation): PaymentRefunded
     {
+
         $apiKey                 = easymerchant_givewp_get_api_key();
         $apiSecretKey           = easymerchant_givewp_get_api_secret_key();
         if (give_is_test_mode()) {
@@ -138,7 +141,8 @@ class EasyMerchantGateway extends PaymentGateway
         try {
 
             $body = json_encode([
-                "charge_id" => $donation->gatewayTransactionId
+                "charge_id" => $donation->gatewayTransactionId,
+                'amount'    => $donation->amount->formatToDecimal(),
             ]);
 
             $checkStatusApi = wp_remote_post($apiUrl . '/charges/' . $donation->gatewayTransactionId, array(
@@ -164,18 +168,21 @@ class EasyMerchantGateway extends PaymentGateway
                 ));
                 $response_body = wp_remote_retrieve_body($response);
                 $response_data = json_decode($response_body, true);
+                if ($response_data['refund_id']) {
+                    $donation->status = DonationStatus::REFUNDED();
+                    $donation->save();
+                    DonationNote::create([
+                        'donationId' => $donation->id,
+                        'content' => sprintf(esc_html__('Refund processed successfully. Reason: %s', 'easymerchant-givewp'), 'refunded by user')
+                    ]);
+                }
             }
-            // return new PaymentRefunded($donation->gatewayTransactionId);
-            $donation->status = DonationStatus::REFUNDED();
-            DonationNote::create([
-                'donationId' => $donation->id,
-                'content' => sprintf(esc_html__('Refund processed successfully. Reason: %s', 'easymerchant-givewp'), 'refund')
-            ]);
-            echo "<script>
-                setTimeout(() => {
-                    window.history.go(-1);
-                }, 1000);
-                </script>";
+            return new PaymentRefunded();
+            // echo "<script>
+            //     setTimeout(() => {
+            //         window.history.go(-1);
+            //     }, 1000);
+            //     </script>";
         } catch (\Exception $exception) {
             throw new PaymentGatewayException('Unable to refund. ' . $exception->getMessage(), $exception->getCode(), $exception);
         }
