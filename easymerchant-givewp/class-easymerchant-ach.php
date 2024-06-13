@@ -126,7 +126,8 @@ class EasyMerchantACH extends PaymentGateway
 
         try {
             $body = json_encode([
-                "charge_id" => $donation->gatewayTransactionId
+                "charge_id" => $donation->gatewayTransactionId,
+                'amount'    => $donation->amount->formatToDecimal(),
             ]);
 
             $checkStatusApi = wp_remote_post($apiUrl . '/charges/' . $donation->gatewayTransactionId, array(
@@ -139,7 +140,6 @@ class EasyMerchantACH extends PaymentGateway
             ));
             $checkPaidUnsetteled = wp_remote_retrieve_body($checkStatusApi);
             $checkStatus = json_decode($checkPaidUnsetteled, true);
-
             if ($checkStatus['data']['status'] === 'Paid') {
                 $response = wp_remote_post($apiUrl . '/refunds/', array(
                     'method'    => 'POST',
@@ -148,18 +148,23 @@ class EasyMerchantACH extends PaymentGateway
                         'X-Api-Secret'   => $apiSecretKey,
                         'Content-Type'   => 'application/json',
                     ),
-                    'body'               => $body,
+                    'body'               => json_encode([
+                        "charge_id" => $checkStatus['data']['transaction_id'],
+                        'amount'    => $donation->amount->formatToDecimal(),
+                    ]),
                 ));
 
                 $response_body = wp_remote_retrieve_body($response);
                 $response_data = json_decode($response_body, true);
                 $donation->status = DonationStatus::REFUNDED();
+                $donation->save();
                 DonationNote::create([
                     'donationId' => $donation->id,
-                    'content' => sprintf(esc_html__('Refund processed successfully. Reason: %s', 'easymerchant-givewp'), 'refund')
+                    'content' => sprintf(esc_html__('Refund processed successfully. Reason: %s', 'easymerchant-givewp'), 'refunded by user')
                 ]);
+                return new PaymentRefunded();
             } else if ($checkStatus['data']['status'] === 'Paid Unsettled') {
-                $response = wp_remote_post($apiUrl . ' /ach/cancel/', array(
+                $cancelledPayment = wp_remote_post($apiUrl . '/ach/cancel/', array(
                     'method'    => 'POST',
                     'headers'   => array(
                         'X-Api-Key'      => $apiKey,
@@ -168,27 +173,27 @@ class EasyMerchantACH extends PaymentGateway
                     ),
                     'body'               => json_encode(
                         [
-                            "charge_id" => $donation->gatewayTransactionId,
-                            "cancel_reason" => "Paid Unsettled"
+                            "charge_id" => $checkStatus['data']['transaction_id'],
+                            "cancel_reason" => "canceled by user"
                         ]
                     ),
                 ));
 
-                $response_body = wp_remote_retrieve_body($response);
-                $response_data = json_decode($response_body, true);
-                // $donation->status = DonationStatus::CANCELLED();
+                $cancelledResponse = wp_remote_retrieve_body($cancelledPayment);
+                $cancelled_data = json_decode($cancelledResponse, true);
+                $donation->status = DonationStatus::CANCELLED();
+                $donation->save();
                 DonationNote::create([
                     'donationId' => $donation->id,
-                    'content' => sprintf(esc_html__('ACH Payment cancelled successfully. Reason: %s', 'easymerchant-givewp'), 'paid unsettled')
+                    'content' => sprintf(esc_html__('ACH Payment cancelled successfully. Reason: %s', 'easymerchant-givewp'), 'canceled by user')
                 ]);
+                return new PaymentRefunded();
             }
-            // return new PaymentRefunded($donation->gatewayTransactionId);
-
-            echo "<script>
-                setTimeout(() => {
-                    window.history.go(-1);
-                }, 1000);
-        </script>";
+            //     echo "<script>
+            //         setTimeout(() => {
+            //             window.history.go(-1);
+            //         }, 1000);
+            // </script>";
         } catch (\Exception $exception) {
             throw new PaymentGatewayException('Unable to refund. ' . $exception->getMessage(), $exception->getCode(), $exception);
         }
