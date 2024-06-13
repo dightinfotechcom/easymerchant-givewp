@@ -162,6 +162,13 @@ class EasyMerchantACH extends PaymentGateway
                     'donationId' => $donation->id,
                     'content' => sprintf(esc_html__('Refund processed successfully. Reason: %s', 'easymerchant-givewp'), 'refunded by user')
                 ]);
+                print_r($response_data['message']);
+                echo "<script>
+                    setTimeout(() => {
+                        window.history.go(-1);
+                    }, 1000);
+                    </script>";
+                die();
                 return new PaymentRefunded();
             } else if ($checkStatus['data']['status'] === 'Paid Unsettled') {
                 $cancelledPayment = wp_remote_post($apiUrl . '/ach/cancel/', array(
@@ -171,12 +178,10 @@ class EasyMerchantACH extends PaymentGateway
                         'X-Api-Secret'   => $apiSecretKey,
                         'Content-Type'   => 'application/json',
                     ),
-                    'body'               => json_encode(
-                        [
-                            "charge_id" => $checkStatus['data']['transaction_id'],
-                            "cancel_reason" => "canceled by user"
-                        ]
-                    ),
+                    'body'               => json_encode([
+                        "charge_id"      => $checkStatus['data']['transaction_id'],
+                        "cancel_reason"  => "canceled by user"
+                    ]),
                 ));
 
                 $cancelledResponse = wp_remote_retrieve_body($cancelledPayment);
@@ -187,13 +192,15 @@ class EasyMerchantACH extends PaymentGateway
                     'donationId' => $donation->id,
                     'content' => sprintf(esc_html__('ACH Payment cancelled successfully. Reason: %s', 'easymerchant-givewp'), 'canceled by user')
                 ]);
+                print_r($cancelled_data['message']);
+                echo "<script>
+                setTimeout(() => {
+                    window.history.go(-1);
+                }, 1000);
+                </script>";
+                die();
                 return new PaymentRefunded();
             }
-            //     echo "<script>
-            //         setTimeout(() => {
-            //             window.history.go(-1);
-            //         }, 1000);
-            // </script>";
         } catch (\Exception $exception) {
             throw new PaymentGatewayException('Unable to refund. ' . $exception->getMessage(), $exception->getCode(), $exception);
         }

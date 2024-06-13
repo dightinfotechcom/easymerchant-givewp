@@ -89,8 +89,6 @@ class EasyMerchantGateway extends PaymentGateway
             $response = $this->makePaymentRequest([
                 'amount'    => $donation->amount->formatToDecimal(),
                 'name'      => trim("$donation->firstName $donation->lastName"),
-                'firstName' => $donation->firstName,
-                // 'lastName'  => $donation->lastName,
                 'email'     => $donation->email,
                 'currency'  => $donation->amount->getCurrency()->getCode(),
             ]);
@@ -177,12 +175,14 @@ class EasyMerchantGateway extends PaymentGateway
                     ]);
                 }
             }
+            print_r($response_data['message']);
+            echo "<script>
+                setTimeout(() => {
+                    window.history.go(-1);
+                }, 1000);
+                </script>";
+            die();
             return new PaymentRefunded();
-            // echo "<script>
-            //     setTimeout(() => {
-            //         window.history.go(-1);
-            //     }, 1000);
-            //     </script>";
         } catch (\Exception $exception) {
             throw new PaymentGatewayException('Unable to refund. ' . $exception->getMessage(), $exception->getCode(), $exception);
         }
