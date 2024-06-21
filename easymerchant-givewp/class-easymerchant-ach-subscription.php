@@ -89,7 +89,7 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
                     'X-Api-Secret'   => $apiSecretKey,
                     'Content-Type'   => 'application/json',
                 ),
-                // 'body'               => $body,
+              
             ));
 
 
@@ -151,7 +151,7 @@ class EasyMerchantACHGatewaySubscriptionModule extends SubscriptionModule
             'payment_type'      => 'recurring',
             'entry_class_code'  => 'CCD',
             'interval'          => $data['period'],
-            'allowed_cycles'    => 4,
+            'allowed_cycles'    => $data['times'],
         ]);
         $response = wp_remote_post($apiUrl . '/ach/charge/', array(
             'method'    => 'POST',
