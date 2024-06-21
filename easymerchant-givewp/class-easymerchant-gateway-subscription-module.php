@@ -85,7 +85,7 @@ class EasyMerchantGatewaySubscriptionModule extends SubscriptionModule
                     'X-Api-Secret'   => $apiSecretKey,
                     'Content-Type'   => 'application/json',
                 ),
-                // 'body'               => $body,
+               
             ));
 
 
@@ -135,7 +135,7 @@ class EasyMerchantGatewaySubscriptionModule extends SubscriptionModule
                     'X-Api-Secret'   => $apiSecretKey,
                     'Content-Type'   => 'application/json',
                 ),
-                // 'body'               => $body,
+              
             ));
 
 
@@ -202,7 +202,7 @@ class EasyMerchantGatewaySubscriptionModule extends SubscriptionModule
             'cardholder_name' => $cc_holder,
             'payment_type'   => 'recurring',
             'interval'       => $data['period'],
-            'allowed_cycles' => 12,
+            'allowed_cycles' => $data['times'],
         ]);
 
         $response = wp_remote_post($apiUrl . '/charges/', array(
